@@ -1,0 +1,19 @@
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Dependency directories
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+
+# Environment / editor config
+.env
+.env.*
+.idea/
+.vscode/
+
+# Logs
+*.log

@@ -1,0 +1,8 @@
+/**
+ * Public styles for Flavor Pairing plugin.
+ */
+
+.flavor-pairing-list {
+	list-style: disc;
+	margin-left: 1.5rem;
+}
