@@ -9,6 +9,9 @@ vendor/
 # Build outputs
 dist/
 
+# Private data
+docs/
+
 # Environment / editor config
 .env
 .env.*
