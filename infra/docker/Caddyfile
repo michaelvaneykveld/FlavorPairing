@@ -1,0 +1,10 @@
+:80 {
+    root * /var/www/html
+    encode gzip zstd
+    php_fastcgi wp:9000
+    file_server
+    log {
+        output stdout
+        format console
+    }
+}

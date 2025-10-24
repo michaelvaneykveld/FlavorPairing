@@ -10,7 +10,8 @@ vendor/
 dist/
 
 # Private data
-docs/
+docs/raw/
+docs/extracted/
 
 # Environment / editor config
 .env
