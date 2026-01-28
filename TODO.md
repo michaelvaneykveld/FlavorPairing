@@ -49,12 +49,12 @@ This document captures the project history, current state, and forward-looking p
      * Cleans pairings (drops cuisines, soups, “as a topping…”, context-only phrases) and picks the strongest tier when duplicates appear.
      * Normalises metadata (season, taste, weight/volume, techniques, tips, substitutes) and removes empties.
      * Keeps `flavor_affinities`, `notes` only when present, deduplicated & trimmed.
-   - Output: `docs/flavor-bible-processed/flavor-bible.json` (529 canonical ingredients).
+   - Output: `docs/flavor-bible-processed/flavor-bible.json` (509 canonical ingredients after cleanup pass).
 
 2. **`parse_vegetarian_flavor_bible.py`**
    - Performs the same process across `chapter003*.xhtml`, `chapter004*.xhtml`, and `A-Z.xhtml`.
    - Handles the more complex markup (nested divs with `recipe-title`, `headnote`, `ingredients` sections, etc.).
-   - Output: `docs/vegetarian-flavor-bible-processed/vegetarian-flavor-bible.json` (676 canonical ingredients).
+   - Output: `docs/vegetarian-flavor-bible-processed/vegetarian-flavor-bible.json` (652 canonical ingredients after cleanup pass).
 
 3. **Shared Functionality**
    - Both scripts include:
@@ -63,6 +63,11 @@ This document captures the project history, current state, and forward-looking p
      * Tier priority map (`ethereal` > `classic` > `frequent` > `recommended`).
      * Metadata compaction (drop null/empty arrays).
      * Rerun safety: skip ingredients already present (idempotent).
+    - Recent upgrades:
+       * `--rebuild` flag to regenerate outputs from scratch.
+       * Better pairing splitting (`and`, `or`, `&`, `/`) while respecting parentheses.
+       * Expanded heading skip lists to avoid non-ingredient sections (techniques, holidays, dish headings).
+       * Heading compound splitting to split merged headings and shared-base lists (e.g., “orange juice”, “orange zest”).
 
 4. **Processed Outputs (committed)**
    - `docs/flavor-bible-processed/flavor-bible.json`
@@ -75,7 +80,11 @@ This document captures the project history, current state, and forward-looking p
    - `process_flavor_matrix.py` (matrix CSV generator).
    - `parse_flavor_bible.py`.
    - `parse_vegetarian_flavor_bible.py`.
-   - Includes usage examples (`python scripts/parse_flavor_bible.py --limit 2000`, etc.).
+   - Includes usage examples (`python scripts/parse_flavor_bible.py --limit 2000`, etc.) and rebuild commands.
+
+2. `scripts/build_canonical_registry.py` added:
+   - Builds a cross-book canonical ingredient registry with aliases and conflict reporting.
+   - Outputs: `docs/canonical-registry/ingredient_registry.json` and `ingredient_registry_report.json`.
 
 2. Additional docs:
    - `docs/windows-stack-setup.md` → WSL/docker instructions.
@@ -100,8 +109,8 @@ This document captures the project history, current state, and forward-looking p
 ### Data Assets
 | Dataset | File | Notes |
 | --- | --- | --- |
-| Flavor Bible | `docs/flavor-bible-processed/flavor-bible.json` | 529 canonical ingredients, cleaned pairings & metadata. |
-| Vegetarian Flavor Bible | `docs/vegetarian-flavor-bible-processed/vegetarian-flavor-bible.json` | 676 canonical ingredients. |
+| Flavor Bible | `docs/flavor-bible-processed/flavor-bible.json` | 509 canonical ingredients after cleanup pass. |
+| Vegetarian Flavor Bible | `docs/vegetarian-flavor-bible-processed/vegetarian-flavor-bible.json` | 652 canonical ingredients after cleanup pass. |
 | Flavor Matrix | `docs/flavor-matrix-processed/flavor_matrix.json`, `flavor_matrix_fixed.json` | “Fixed” JSON from GPT runs; awaiting CSV conversion if needed. |
 | Structure Notes | `docs/structure-notes.md` | Field-by-field markup analysis for Flavor Bible titles. |
 | Graph Taxonomy | `docs/graph-taxonomy.md` | Proposed node/relationship schema for ingestion. |

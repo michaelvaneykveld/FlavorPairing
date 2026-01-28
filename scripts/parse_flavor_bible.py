@@ -48,11 +48,48 @@ SKIP_KEYWORDS = {
     "DRINKS",
     "SALADS",
     "SOUPS",
+    "SOUP",
     "SAUCES",
     "SMOOTHIES",
     "SNACKS",
     "STOCK",
     "TRAIL MIX",
+    "BALANCE",
+    "COOLING",
+    "WARMING",
+    "SOURNESS",
+    "PIQUANCY",
+    "LUXURIOUS",
+    "MENU",
+    "CHRISTMAS",
+    "THANKSGIVING",
+    "PRESSURE-COOKING",
+    "SOUS-VIDE",
+    "SOUS-VIDE COOKING",
+    "SLOW-COOKED",
+    "SMOKING",
+    "GRILLING",
+    "DEHYDRATING",
+    "THICKENING AGENTS",
+    "OIL SUBSTITUTES",
+    "ORGANIC PRODUCE",
+    "WHOLE FOODS",
+    "WHOLE GRAINS",
+    "GLUTEN",
+    "GLUTEN-FREE",
+    "FRUIT",
+    "FRUITS",
+    "VEGETABLE",
+    "VEGETABLES",
+    "MEAT",
+    "MEATS",
+    "SEAFOOD",
+    "SHELLFISH",
+    "POULTRY",
+    "SPICES",
+    "HERBS",
+    "GRAINS",
+    "STUFFING",
 }
 
 PAIRING_STOPWORDS = {
@@ -92,6 +129,15 @@ PAIRING_STOPWORDS = {
     "stuffings",
     "snack",
     "snacks",
+    "foods",
+    "flavors",
+    "dishes",
+    "fruit",
+    "fruits",
+    "vegetable",
+    "vegetables",
+    "meat",
+    "meats",
 }
 
 TIER_PRIORITY = {"ethereal": 3, "classic": 2, "frequent": 1, "recommended": 0}
@@ -201,6 +247,69 @@ def split_heading_parts(elem: ET.Element) -> List[str]:
     return [part for part in parts if part]
 
 
+def split_heading_variants(heading: str) -> List[str]:
+    text = clean_text(heading)
+    if not text:
+        return []
+    split_points = [match.start() + 1 for match in re.finditer(r"\)\s+(?=[A-Z])", text)]
+    if not split_points:
+        return split_heading_compounds(text)
+    parts: List[str] = []
+    last = 0
+    for point in split_points:
+        parts.append(text[last:point].strip())
+        last = point + 1
+    parts.append(text[last:].strip())
+    expanded: List[str] = []
+    for part in parts:
+        expanded.extend(split_heading_compounds(part))
+    return [part for part in expanded if part]
+
+
+def base_word(text: str) -> str:
+    tokens = re.sub(r"[^A-Za-z]", " ", text).split()
+    if not tokens:
+        return ""
+    word = tokens[0].lower()
+    if len(word) > 3 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 3 and word.endswith(("ses", "xes", "zes", "ches", "shes", "oes")):
+        return word[:-2]
+    if len(word) > 3 and word.endswith("s"):
+        return word[:-1]
+    return word
+
+
+def split_heading_compounds(text: str) -> List[str]:
+    lowered = text.lower()
+    if " and " in lowered:
+        match = re.match(r"^(?P<base>[A-Za-z][A-Za-z '\-]+)\s+and\s+(?P=base)\s+(?P<suffix>.+)$", text, re.IGNORECASE)
+        if match:
+            base = clean_text(match.group("base"))
+            suffix = clean_text(match.group("suffix"))
+            return [base, f"{base} {suffix}".strip()]
+
+    if "," in text:
+        items = split_list(text)
+        expanded: List[str] = []
+        for item in items:
+            item = re.sub(r"^(and|or)\s+", "", item.strip(), flags=re.IGNORECASE)
+            if " and " in item.lower() and "(" not in item and ")" not in item:
+                index = item.lower().find(" and ")
+                left = item[:index]
+                right = item[index + 5 :]
+                expanded.extend([left, right])
+            else:
+                expanded.append(item)
+
+        if expanded:
+            base = base_word(expanded[0])
+            if base and all(base_word(item) == base for item in expanded[1:]):
+                return [clean_text(item) for item in expanded if clean_text(item)]
+
+    return [text]
+
+
 def iter_entries() -> Iterable[Entry]:
     for chapter_path in CHAPTER_FILES:
         elems = load_body_elements(chapter_path)
@@ -211,18 +320,27 @@ def iter_entries() -> Iterable[Entry]:
             klass = elem.get("class")
             if klass == "h":
                 parts = split_heading_parts(elem)
-                if heading is not None and not should_skip_heading(heading):
-                    yield Entry(heading, buffer, chapter_path)
-                for part in parts[:-1]:
+                expanded: List[str] = []
+                for part in parts:
+                    expanded.extend(split_heading_variants(part))
+
+                if heading is not None:
+                    for index, part in enumerate(split_heading_variants(heading)):
+                        if part and not should_skip_heading(part):
+                            yield Entry(part, buffer if index == 0 else [], chapter_path)
+
+                for part in expanded[:-1]:
                     if part and not should_skip_heading(part):
                         yield Entry(part, [], chapter_path)
-                heading = parts[-1] if parts else ""
+                heading = expanded[-1] if expanded else ""
                 buffer = []
             elif heading is not None:
                 buffer.append(elem)
 
-        if heading is not None and buffer and not should_skip_heading(heading):
-            yield Entry(heading, buffer, chapter_path)
+        if heading is not None and buffer:
+            for index, part in enumerate(split_heading_variants(heading)):
+                if part and not should_skip_heading(part):
+                    yield Entry(part, buffer if index == 0 else [], chapter_path)
 
 
 def should_skip_heading(heading: str) -> bool:
@@ -234,7 +352,11 @@ def should_skip_heading(heading: str) -> bool:
     if upper.startswith("SEE "):
         return True
     canonical, _ = canonicalize_name(heading)
-    return canonical is None
+    if canonical is None:
+        return True
+    if len(canonical.strip()) <= 1:
+        return True
+    return False
 
 
 def parse_entry(entry: Entry) -> Optional[Dict[str, object]]:
@@ -288,7 +410,7 @@ def parse_entry(entry: Entry) -> Optional[Dict[str, object]]:
             affinity_items: List[str] = []
             for part in text.split("+"):
                 canonical, _ = canonicalize_name(part)
-                if not canonical or should_skip_pairing(canonical):
+                if not canonical or should_skip_pairing(canonical, part):
                     continue
                 affinity_items.append(canonical)
             if len(affinity_items) >= 2:
@@ -296,13 +418,14 @@ def parse_entry(entry: Entry) -> Optional[Dict[str, object]]:
             continue
 
         if klass in {"bl1", "nl1", "nl"}:
-            canonical, original = canonicalize_name(text)
-            if not canonical or should_skip_pairing(canonical):
-                continue
             tier = determine_tier(elem, text)
-            existing = pairings.get(canonical)
-            if existing is None or TIER_PRIORITY[tier] > TIER_PRIORITY[existing["tier"]]:
-                pairings[canonical] = {"ingredient": canonical, "display_name": original, "tier": tier}
+            for candidate in split_pairing_candidates(text):
+                canonical, original = canonicalize_name(candidate)
+                if not canonical or should_skip_pairing(canonical, candidate):
+                    continue
+                existing = pairings.get(canonical)
+                if existing is None or TIER_PRIORITY[tier] > TIER_PRIORITY[existing["tier"]]:
+                    pairings[canonical] = {"ingredient": canonical, "display_name": original, "tier": tier}
 
     compact_metadata(metadata)
 
@@ -414,12 +537,62 @@ def split_list(value: str) -> List[str]:
     return tokens or ([clean_text(value)] if value else [])
 
 
-def should_skip_pairing(canonical: str) -> bool:
-    if not canonical:
+def split_on_delimiter(text: str, delimiter: str) -> List[str]:
+    lowered = text.lower()
+    tokens: List[str] = []
+    current: List[str] = []
+    depth = 0
+    i = 0
+    while i < len(text):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")" and depth > 0:
+            depth -= 1
+
+        if depth == 0 and lowered.startswith(delimiter, i):
+            token = clean_text("".join(current))
+            if token:
+                tokens.append(token)
+            current = []
+            i += len(delimiter)
+            continue
+
+        current.append(text[i])
+        i += 1
+
+    token = clean_text("".join(current))
+    if token:
+        tokens.append(token)
+    return tokens if len(tokens) > 1 else [text]
+
+
+def split_pairing_candidates(text: str) -> List[str]:
+    candidates = [clean_text(text)]
+    for delimiter in [" and ", " or ", " & ", "/"]:
+        expanded: List[str] = []
+        for candidate in candidates:
+            expanded.extend(split_on_delimiter(candidate, delimiter))
+        candidates = expanded
+    return [candidate for candidate in candidates if candidate]
+
+
+def should_skip_pairing(canonical: str, raw_text: Optional[str] = None) -> bool:
+    if not canonical or len(canonical.strip()) <= 1:
         return True
     lower = canonical.lower()
     for word in PAIRING_STOPWORDS:
         if word in lower:
+            return True
+    if raw_text:
+        raw_lower = raw_text.lower()
+        if re.search(
+            r"\b(add|avoid|bake|cook|fry|grill|mix|pair|pairs|pairing|roast|saute|sauté|serve|sprinkle|stir|try|use|using|goes|never)\b",
+            raw_lower,
+        ):
+            return True
+        if "a little " in raw_lower or "goes a very long way" in raw_lower:
+            return True
+        if len(raw_lower.split()) > 7:
             return True
     return False
 
@@ -468,12 +641,20 @@ def append_record(record: Dict[str, object]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Parse Flavor Bible ingredient entries.")
     parser.add_argument("--limit", type=int, default=5, help="Number of new entries to append (default: 5)")
+    parser.add_argument("--rebuild", action="store_true", help="Rebuild output from scratch")
     args = parser.parse_args()
+
+    if args.rebuild and OUTPUT_PATH.exists():
+        OUTPUT_PATH.unlink()
 
     processed = 0
     existing = set()
     if OUTPUT_PATH.exists():
         existing = {item["slug"] for item in json.loads(OUTPUT_PATH.read_text(encoding="utf-8"))}
+
+    limit = args.limit
+    if args.rebuild:
+        limit = 10**9
 
     for entry in iter_entries():
         canonical_name, _ = canonicalize_name(entry.heading)
@@ -489,7 +670,7 @@ def main() -> None:
         existing.add(slug)
         processed += 1
         print(f"Captured ingredient: {record['display_name']}")
-        if processed >= args.limit:
+        if processed >= limit:
             break
 
     if processed == 0:

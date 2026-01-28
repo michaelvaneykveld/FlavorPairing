@@ -30,6 +30,12 @@ Example usage (parses the whole book in one shot):
 python scripts/parse_flavor_bible.py --limit 2000
 ```
 
+Full rebuild (overwrite existing JSON):
+
+```bash
+python scripts/parse_flavor_bible.py --rebuild --limit 5000
+```
+
 Output: `docs/flavor-bible-processed/flavor-bible.json`
 
 ## `parse_vegetarian_flavor_bible.py`
@@ -46,6 +52,31 @@ Run:
 python scripts/parse_vegetarian_flavor_bible.py --limit 2000
 ```
 
+Full rebuild (overwrite existing JSON):
+
+```bash
+python scripts/parse_vegetarian_flavor_bible.py --rebuild --limit 5000
+```
+
 Output: `docs/vegetarian-flavor-bible-processed/vegetarian-flavor-bible.json`
 
 Both parsers are idempotent—rerunning them will skip already-seen ingredients by slug. The resulting JSON files feed directly into Cypher import scripts without any additional cleanup.
+
+## `build_canonical_registry.py`
+
+Builds a consolidated ingredient registry across both books with aliases and conflict reporting. The script:
+
+1. Merges the parsed JSON from the Flavor Bible and Vegetarian Flavor Bible.
+2. Extracts aliases from display names (e.g., “aka”, “see also”, parenthetical variants).
+3. Outputs a canonical registry plus a conflict report to help resolve ambiguous ingredients.
+
+Run:
+
+```bash
+python scripts/build_canonical_registry.py
+```
+
+Outputs:
+
+- `docs/canonical-registry/ingredient_registry.json`
+- `docs/canonical-registry/ingredient_registry_report.json`
